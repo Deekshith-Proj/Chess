@@ -2,6 +2,7 @@ import chess
 import pygame
 import sys
 import random
+from tkinter import Tk, simpledialog
 
 # Game Constants
 WIDTH, HEIGHT = 512, 512
@@ -87,13 +88,29 @@ def find_best_move(board, depth=4):
         alpha = max(alpha, eval)
     return best_move
 
+# Promotion Dialog
+def choose_promotion():
+    root = Tk()
+    root.withdraw()
+    piece = simpledialog.askstring("Promotion", "Promote to (Q, R, B, N):", parent=root)
+    root.destroy()
+    piece = piece.upper() if piece else 'Q'
+    return {'Q': chess.QUEEN, 'R': chess.ROOK, 'B': chess.BISHOP, 'N': chess.KNIGHT}.get(piece, chess.QUEEN)
+
 # Drawing Functions
-def draw_board(win):
+def draw_board(win, board):
     colors = [pygame.Color("white"), pygame.Color("gray")]
+    check_square = None
+    if board.is_check():
+        check_square = board.king(board.turn)
+
     for r in range(DIMENSION):
         for c in range(DIMENSION):
+            square = chess.square(c, 7 - r)
             color = colors[(r + c) % 2]
             pygame.draw.rect(win, color, pygame.Rect(c*SQ_SIZE, r*SQ_SIZE, SQ_SIZE, SQ_SIZE))
+            if square == check_square:
+                pygame.draw.rect(win, pygame.Color("red"), pygame.Rect(c*SQ_SIZE, r*SQ_SIZE, SQ_SIZE, SQ_SIZE), 4)
 
 def draw_pieces(win, board):
     for square in chess.SQUARES:
@@ -103,8 +120,7 @@ def draw_pieces(win, board):
             row = chess.square_rank(square)
             color = 'w' if piece.color == chess.WHITE else 'b'
             name = f"{color}{piece.symbol().upper()}"
-            if name in IMAGES:
-                win.blit(IMAGES[name], pygame.Rect(col*SQ_SIZE, (7-row)*SQ_SIZE, SQ_SIZE, SQ_SIZE))
+            win.blit(IMAGES[name], pygame.Rect(col*SQ_SIZE, (7-row)*SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
 # Main Game Loop
 def main():
@@ -137,6 +153,9 @@ def main():
                     else:
                         player_clicks.append(square)
                         move = chess.Move(player_clicks[0], player_clicks[1])
+                        # Handle promotions
+                        if chess.square_rank(player_clicks[1]) in [0, 7] and board.piece_at(player_clicks[0]).piece_type == chess.PAWN:
+                            move.promotion = choose_promotion()
                         if move in board.legal_moves:
                             board.push(move)
                         selected_square = None
@@ -147,7 +166,7 @@ def main():
             if ai_move:
                 board.push(ai_move)
 
-        draw_board(win)
+        draw_board(win, board)
         draw_pieces(win, board)
         pygame.display.flip()
         clock.tick(MAX_FPS)
