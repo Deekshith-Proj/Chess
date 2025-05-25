@@ -2,7 +2,8 @@ import chess
 import pygame
 import sys
 import random
-from tkinter import Tk, simpledialog
+import tkinter as tk
+from tkinter import simpledialog
 
 # Game Constants
 WIDTH, HEIGHT = 512, 512
@@ -41,16 +42,39 @@ def evaluate_board(board):
     for piece_type in piece_values:
         eval += len(board.pieces(piece_type, chess.WHITE)) * piece_values[piece_type]
         eval -= len(board.pieces(piece_type, chess.BLACK)) * piece_values[piece_type]
+
+    # Bonus for mobility
+    eval += 10 * len(list(board.legal_moves)) if board.turn else -10 * len(list(board.legal_moves))
+
+    # Bonus for checks
+    if board.is_check():
+        eval += 50 if board.turn else -50
+
     return eval if board.turn else -eval
+
+# Order moves based on aggression
+def order_moves(board):
+    def move_score(move):
+        score = 0
+        if board.is_capture(move):
+            score += 1000
+        if board.gives_check(move):
+            score += 500
+        if move.promotion:
+            score += 800
+        return score
+    return sorted(board.legal_moves, key=move_score, reverse=True)
 
 # Minimax with Alpha-Beta
 def minimax_alpha_beta(board, depth, alpha, beta, is_maximizing):
     if depth == 0 or board.is_game_over():
         return evaluate_board(board)
 
+    moves = order_moves(board)
+
     if is_maximizing:
         max_eval = float('-inf')
-        for move in board.legal_moves:
+        for move in moves:
             board.push(move)
             eval = minimax_alpha_beta(board, depth - 1, alpha, beta, False)
             board.pop()
@@ -61,7 +85,7 @@ def minimax_alpha_beta(board, depth, alpha, beta, is_maximizing):
         return max_eval
     else:
         min_eval = float('inf')
-        for move in board.legal_moves:
+        for move in moves:
             board.push(move)
             eval = minimax_alpha_beta(board, depth - 1, alpha, beta, True)
             board.pop()
@@ -78,7 +102,7 @@ def find_best_move(board, depth=4):
     alpha = float('-inf')
     beta = float('inf')
 
-    for move in board.legal_moves:
+    for move in order_moves(board):
         board.push(move)
         eval = minimax_alpha_beta(board, depth - 1, alpha, beta, False)
         board.pop()
@@ -88,14 +112,21 @@ def find_best_move(board, depth=4):
         alpha = max(alpha, eval)
     return best_move
 
-# Promotion Dialog
+# Promotion selector
 def choose_promotion():
-    root = Tk()
+    root = tk.Tk()
     root.withdraw()
     piece = simpledialog.askstring("Promotion", "Promote to (Q, R, B, N):", parent=root)
     root.destroy()
-    piece = piece.upper() if piece else 'Q'
-    return {'Q': chess.QUEEN, 'R': chess.ROOK, 'B': chess.BISHOP, 'N': chess.KNIGHT}.get(piece, chess.QUEEN)
+    if piece:
+        piece = piece.upper()
+        return {
+            'Q': chess.QUEEN,
+            'R': chess.ROOK,
+            'B': chess.BISHOP,
+            'N': chess.KNIGHT
+        }.get(piece, chess.QUEEN)
+    return chess.QUEEN
 
 # Drawing Functions
 def draw_board(win, board):
